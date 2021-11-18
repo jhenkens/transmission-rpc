@@ -495,6 +495,7 @@ TORRENT_ARGS = {
         "editDate": Args(BaseType.number, 16),
         "file-count": Args(BaseType.number, 17),
         "primary-mime-type": Args(BaseType.string, 17),
+        "sequential": Args(BaseType.boolean, 10),
     },
     "set": {
         "files-wanted": Args(
@@ -666,6 +667,7 @@ TORRENT_ARGS = {
             "Position of this transfer in its queue.",
         ),
         "labels": Args(BaseType.array, 16, None, None, None, "array of string labels"),
+        "sequential": Args(BaseType.boolean, 10),
     },
     "add": {
         "download-dir": Args(

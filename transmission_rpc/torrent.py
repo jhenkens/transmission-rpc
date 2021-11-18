@@ -132,6 +132,7 @@ class Torrent:
             "seedIdleMode",
             "seedRatioLimit",
             "seedRatioMode",
+            "sequential",
             "uploadLimit",
             "uploadLimited",
         ]
@@ -582,6 +583,20 @@ class Torrent:
             self._push()
         else:
             raise ValueError("Not a valid limit")
+
+    @property
+    def sequential(self) -> bool:
+        """
+        Returns true if the torrent is downloading sequentially
+        """
+        return self._fields["sequential"].value
+
+    @sequential.setter
+    def sequential(self, sequential: bool):
+        """
+        Returns true if the torrent is downloading sequentially
+        """
+        self._fields["sequential"] = Field(sequential, True)
 
     @property
     def upload_limit(self) -> Optional[int]:
