@@ -2,10 +2,13 @@
 # Copyright (c) 2018-2020 Trim21 <i@trim21.me>
 # Licensed under the MIT license.
 import datetime
+from typing import Any, Dict, Tuple
+from unittest import mock
 
 import pytest
 
-from transmission_rpc import utils
+from transmission_rpc import utils, from_url
+from transmission_rpc.constants import LOGGER, DEFAULT_TIMEOUT
 
 
 def assert_almost_eq(value: float, expected: float):
@@ -25,7 +28,7 @@ def assert_almost_eq(value: float, expected: float):
         1152921504606846976: (1.0, "EiB"),
     }.items(),
 )
-def test_format_size(size, expected):
+def test_format_size(size, expected: Tuple[float, str]):
     result = utils.format_size(size)
     assert_almost_eq(result[0], expected[0])
     assert result[1] == expected[1]
@@ -67,20 +70,47 @@ def test_format_timedelta(delta, expected):
 
 
 @pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        (0, 0),
-        (1, 1),
-        (1000, 1),
-        ("true", 1),
-        ("Yes", 1),
-        ("truE", 1),
-        ("baka", 0),
-        ("false", 0),
-        ("no", 0),
-        (True, 1),
-        (False, 0),
-    ],
+    ("url", "kwargs"),
+    {
+        "http://a:b@127.0.0.1:9092/transmission/rpc": {
+            "protocol": "http",
+            "username": "a",
+            "password": "b",
+            "host": "127.0.0.1",
+            "port": 9092,
+            "path": "/transmission/rpc",
+        },
+        "http://127.0.0.1/transmission/rpc": {
+            "protocol": "http",
+            "username": None,
+            "password": None,
+            "host": "127.0.0.1",
+            "port": 80,
+            "path": "/transmission/rpc",
+        },
+        "https://127.0.0.1/tr/transmission/rpc": {
+            "protocol": "https",
+            "username": None,
+            "password": None,
+            "host": "127.0.0.1",
+            "port": 443,
+            "path": "/tr/transmission/rpc",
+        },
+        "https://127.0.0.1/": {
+            "protocol": "https",
+            "username": None,
+            "password": None,
+            "host": "127.0.0.1",
+            "port": 443,
+            "path": "/",
+        },
+    }.items(),
 )
-def test_rpc_bool(value, expected):
-    assert utils.rpc_bool(value) == expected, f"{value} should be convert to {expected}"
+def test_from_url(url: str, kwargs: Dict[str, Any]):
+    with mock.patch("transmission_rpc.Client") as m:
+        from_url(url)
+        m.assert_called_once_with(
+            **kwargs,
+            timeout=DEFAULT_TIMEOUT,
+            logger=LOGGER,
+        )

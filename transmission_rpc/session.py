@@ -1,19 +1,101 @@
-# Copyright (c) 2018-2021 Trim21 <i@trim21.me>
-# Copyright (c) 2008-2014 Erik Svensson <erik.public@gmail.com>
-# Licensed under the MIT license.
-from typing import TYPE_CHECKING, Any, Dict, Tuple, Union, Generator
+import warnings
+from typing import List, Optional
 
 from typing_extensions import Literal
 
-from transmission_rpc.lib_types import Field
-
-if TYPE_CHECKING:
-    from transmission_rpc.client import Client
+from transmission_rpc.types import Container
 
 
-class Session:
+class Stats(Container):
+    @property
+    def uploaded_bytes(self) -> int:
+        return self.fields["uploadedBytes"]
+
+    @property
+    def downloaded_bytes(self) -> int:
+        return self.fields["downloadedBytes"]
+
+    @property
+    def files_added(self) -> int:
+        return self.fields["filesAdded"]
+
+    @property
+    def session_count(self) -> int:
+        return self.fields["sessionCount"]
+
+    @property
+    def seconds_active(self) -> int:
+        return self.fields["secondsActive"]
+
+
+class SessionStats(Container):
+    # https://github.com/transmission/transmission/blob/main/docs/rpc-spec.md
+    # 42-session-statistics
+
+    @property
+    def active_torrent_count(self) -> int:
+        return self.fields["activeTorrentCount"]
+
+    @property
+    def download_speed(self) -> int:
+        return self.fields["downloadSpeed"]
+
+    @property
+    def paused_torrent_count(self) -> int:
+        return self.fields["pausedTorrentCount"]
+
+    @property
+    def torrent_count(self) -> int:
+        return self.fields["torrentCount"]
+
+    @property
+    def upload_speed(self) -> int:
+        return self.fields["uploadSpeed"]
+
+    @property
+    def cumulative_stats(self) -> Stats:
+        return Stats(fields=self.fields["cumulative-stats"])
+
+    @property
+    def current_stats(self) -> Stats:
+        return Stats(fields=self.fields["current-stats"])
+
+
+class Units(Container):
+    # 4 strings: KB/s, MB/s, GB/s, TB/s
+    @property
+    def speed_units(self) -> List[str]:
+        return self.fields["speed-units"]
+
+    # number of bytes in a KB (1000 for kB; 1024 for KiB)
+    @property
+    def speed_bytes(self) -> int:
+        return self.fields["speed-bytes"]
+
+    # 4 strings: KB/s, MB/s, GB/s, TB/s
+    @property
+    def size_units(self) -> List[str]:
+        return self.fields["size-units"]
+
+    # number of bytes in a KB (1000 for kB; 1024 for KiB)
+    @property
+    def size_bytes(self) -> int:
+        return self.fields["size-bytes"]
+
+    # 4 strings: KB/s, MB/s, GB/s, TB/s
+    @property
+    def memory_units(self) -> List[str]:
+        return self.fields["memory-units"]
+
+    # number of bytes in a KB (1000 for kB; 1024 for KiB)
+    @property
+    def memory_bytes(self) -> int:
+        return self.fields["memory-bytes"]
+
+
+class Session(Container):
     """
-    Session is a dict-like class holding the session data for a Transmission daemon.
+    Session is a class holding the session data for a Transmission daemon.
 
     Access the session field can be done through attributes.
     The attributes available are the same as the session arguments in the
@@ -28,188 +110,316 @@ class Session:
 
         current = session.download_dir
 
+    https://github.com/transmission/transmission/blob/main/docs/rpc-spec.md#41-session-arguments
 
-    there are also setter like ``Session().download_dir = '/path/to/download'``
-
-    .. code-block:: python
-
-        session = Client().get_session()
-
-        session.download_dir = '/path/to/new/download/dir'
-
-
-    if you want to batch update a session, call ``.update(data)``
-
-    .. code-block:: python
-
-        session = Client().get_session()
-
-        session.update({'k1': 'v1', "k2": "v2"})
-
-
-    if you have to access to the private ``Session()._fields``,
-    keys are stored with underscore.
+    Warnings
+    --------
+    setter on session's properties has been removed, please use ``Client().set_session()`` instead
     """
 
-    def __init__(self, client: "Client", fields: Dict[str, Any] = None):
-        self._client = client
-        self._fields: Dict[str, Field] = {}
-        if fields is not None:
-            self._update(fields)
+    @property
+    def alt_speed_down(self) -> int:
+        """max global download speed (KBps)"""
+        return self.fields["alt-speed-down"]
 
-    def __getattr__(self, name: str) -> Any:
-        try:
-            return self._fields[name].value
-        except KeyError as e:
-            raise AttributeError(f"No attribute {name}") from e
+    @property
+    def alt_speed_enabled(self) -> bool:
+        # true means use the alt speeds
+        return self.fields["alt-speed-enabled"]
 
-    def _set(self, key: str, value: Any, commit: bool = False) -> None:
-        key = key.replace("-", "_")
-        current_field = self._fields.get(key)
-        if current_field is None:
-            self._fields[key] = Field(value, True)
-        else:
-            if current_field.value != value:
-                self._fields[key] = Field(value, True)
-        if commit:
-            self._commit(key, value)
+    @property
+    def alt_speed_time_begin(self) -> int:
+        """when to turn on alt speeds (units: minutes after midnight)"""
+        return self.fields["alt-speed-time-begin"]
 
-    def __str__(self) -> str:
-        text = ""
-        max_length = max(len(x) for x in self._fields.keys()) + 1
-        for key, value in sorted(self._fields.items(), key=lambda x: x[0]):
-            text += f"{key.ljust(max_length)}: {value.value!r}\n"
-        return text
+    @property
+    def alt_speed_time_day(self) -> int:
+        """what day(s) to turn on alt speeds (look at tr_sched_day)"""
+        return self.fields["alt-speed-time-day"]
 
-    def _commit(self, key: str = None, value: Any = None) -> None:
-        """submit all dirty field to client"""
-        dirty = {}
+    @property
+    def alt_speed_time_enabled(self) -> bool:
+        """true means the scheduled on/off times are used"""
+        return self.fields["alt-speed-time-enabled"]
 
-        if key is not None and value is not None:
-            dirty[key] = value
-        else:
-            for k, v in self._fields.items():
-                if v.dirty:
-                    dirty[k] = v.value
+    @property
+    def alt_speed_time_end(self) -> int:
+        """when to turn off alt speeds (units: same)"""
+        return self.fields["alt-speed-time-end"]
 
-        self._client.set_session(**dirty)
+    @property
+    def alt_speed_up(self) -> int:
+        """max global upload speed (KBps)"""
+        return self.fields["alt-speed-up"]
 
-    def _update(self, other: Union[Dict[str, Any], "Session"]) -> None:
-        if isinstance(other, dict):
-            for key, value in other.items():
-                self._set(key, value)
-        elif isinstance(other, Session):
-            for key, value in other._fields.items():
-                self._set(key, value.value)
-        else:
-            raise ValueError("Cannot update with supplied data")
+    @property
+    def blocklist_enabled(self) -> bool:
+        """true means enabled"""
+        return self.fields["blocklist-enabled"]
 
-    def update(self, other: Union[Dict[str, Any], "Session"]) -> None:
-        """
-        Update the session data from a Transmission JSON-RPC arguments dictionary
-        """
-        self._update(other)
-        self._commit()
+    @property
+    def blocklist_size(self) -> int:
+        """int of rules in the blocklist"""
+        return self.fields["blocklist-size"]
 
-    def keys(self) -> Generator[str, None, None]:
-        """
-        session keys with underscore (eg: ``download_dir``)
-        """
-        yield from self._fields.keys()
+    @property
+    def blocklist_url(self) -> str:
+        """location of the blocklist to use for `blocklist-update`"""
+        return self.fields["blocklist-url"]
 
-    def values(self) -> Generator[Any, None, None]:
-        for value in self._fields.values():
-            yield value.value
+    @property
+    def cache_size_mb(self) -> int:
+        """maximum size of the disk cache (MB)"""
+        return self.fields["cache-size-mb"]
 
-    def items(self) -> Generator[Tuple[str, Any], None, None]:
-        """
-        iter key,value pair
+    @property
+    def config_dir(self) -> str:
+        """location of transmission's configuration directory"""
+        return self.fields["config-dir"]
 
-        hyphen in key is replace by underscore. (eg: ``'download_dir'``)
-        """
-        for key, field in self._fields.items():
-            yield key, field.value
+    @property
+    def dht_enabled(self) -> bool:
+        """true means allow dht in public torrents"""
+        return self.fields["dht-enabled"]
 
     @property
     def download_dir(self) -> str:
-        """default download location
-
-        - rpc version 12
-        - transmission version 2.20
-        :return:
-        """
-        return self.__getattr__("download_dir")
-
-    @download_dir.setter
-    def download_dir(self, location: str) -> None:
-        """Enable/disable peer exchange."""
-        if isinstance(location, str) and location:
-            self._set("download_dir", location, True)
-        else:
-            raise TypeError(f"{location!r} if not a valid 'download-dir'")
+        """default path to download torrents"""
+        return self.fields["download-dir"]
 
     @property
-    def version(self) -> str:
-        """
-        - rpc version 3
-        - transmission version 1.41
-        """
-        return self.__getattr__("version")
+    def download_dir_free_space(self) -> int:
+        """**DEPRECATED** Use the `free-space` method instead."""
+        return self.fields["download-dir-free-space"]
 
     @property
-    def rpc_version(self) -> int:
-        """
-        - rpc version 4
-        - transmission version 1.50
-        """
-        return self.__getattr__("rpc_version")
+    def download_queue_enabled(self) -> bool:
+        """if true, limit how many torrents can be downloaded at once"""
+        return self.fields["download-queue-enabled"]
+
+    @property
+    def download_queue_size(self) -> int:
+        """max int of torrents to download at once (see download-queue-enabled)"""
+        return self.fields["download-queue-size"]
+
+    @property
+    def encryption(self) -> Literal["required", "preferred", "tolerated"]:
+        return self.fields["encryption"]
+
+    @property
+    def idle_seeding_limit_enabled(self) -> bool:
+        """true if the seeding inactivity limit is honored by default"""
+        return self.fields["idle-seeding-limit-enabled"]
+
+    @property
+    def idle_seeding_limit(self) -> int:
+        """torrents we're seeding will be stopped if they're idle for this long"""
+        return self.fields["idle-seeding-limit"]
+
+    @property
+    def incomplete_dir_enabled(self) -> bool:
+        """true means keep torrents in incomplete-dir until done"""
+        return self.fields["incomplete-dir-enabled"]
+
+    @property
+    def incomplete_dir(self) -> str:
+        """path for incomplete torrents, when enabled"""
+        return self.fields["incomplete-dir"]
+
+    @property
+    def lpd_enabled(self) -> bool:
+        """true means allow Local Peer Discovery in public torrents"""
+        return self.fields["lpd-enabled"]
+
+    @property
+    def peer_limit_global(self) -> int:
+        """maximum global int of peers"""
+        return self.fields["peer-limit-global"]
+
+    @property
+    def peer_limit_per_torrent(self) -> int:
+        """maximum global int of peers"""
+        return self.fields["peer-limit-per-torrent"]
+
+    @property
+    def peer_port_random_on_start(self) -> bool:
+        """true means pick a random peer port on launch"""
+        return self.fields["peer-port-random-on-start"]
 
     @property
     def peer_port(self) -> int:
-        """Get the peer port.
-
-        - rpc version 5
-        - transmission version 1.60
-        """
-        return self.__getattr__("peer_port")
-
-    @peer_port.setter
-    def peer_port(self, port: int) -> None:
-        """Set the peer port.
-
-        - rpc version 5
-        - transmission version 1.60
-        """
-        if isinstance(port, int):
-            self._set("peer_port", port, True)
-        else:
-            raise ValueError("Not a valid limit")
+        """port int"""
+        return self.fields["peer-port"]
 
     @property
     def pex_enabled(self) -> bool:
-        """Is peer exchange enabled
-
-        - rpc version 5
-        - transmission version 1.60"""
-        return self.__getattr__("pex_enabled")
-
-    @pex_enabled.setter
-    def pex_enabled(self, enabled: bool) -> None:
-        """Enable/disable peer exchange."""
-        if isinstance(enabled, bool):
-            self._set("pex_enabled", enabled, True)
-        else:
-            raise TypeError("Not a valid type")
+        """true means allow pex in public torrents"""
+        return self.fields["pex-enabled"]
 
     @property
-    def encryption(self) -> str:
-        return self.__getattr__("encryption")
+    def port_forwarding_enabled(self) -> bool:
+        """true means ask upstream router to forward the configured peer port to transmission using UPnP or NAT-PMP"""
+        return self.fields["port-forwarding-enabled"]
 
-    @encryption.setter
-    def encryption(self, value: Literal["required", "preferred", "tolerated"]) -> None:
-        if value in {"required", "preferred", "tolerated"}:
-            self._set("encryption", value, commit=True)
-        else:
-            raise ValueError(
-                "Not a valid encryption, can only be one of ['required', 'preferred', 'tolerated']"
-            )
+    @property
+    def queue_stalled_enabled(self) -> bool:
+        """whether or not to consider idle torrents as stalled"""
+        return self.fields["queue-stalled-enabled"]
+
+    @property
+    def queue_stalled_minutes(self) -> int:
+        """torrents that are idle for N minutes aren't counted toward seed-queue-size or download-queue-size"""
+        return self.fields["queue-stalled-minutes"]
+
+    @property
+    def rename_partial_files(self) -> bool:
+        """true means append `.part` to incomplete files"""
+        return self.fields["rename-partial-files"]
+
+    @property
+    def rpc_version_minimum(self) -> int:
+        """the minimum RPC API version supported"""
+        return self.fields["rpc-version-minimum"]
+
+    @property
+    def rpc_version(self) -> int:
+        """the current RPC API version"""
+        return self.fields["rpc-version"]
+
+    @property
+    def script_torrent_done_enabled(self) -> bool:
+        """whether or not to call the `done` script"""
+        return self.fields["script-torrent-done-enabled"]
+
+    @property
+    def script_torrent_done_filename(self) -> str:
+        """filename of the script to run"""
+        return self.fields["script-torrent-done-filename"]
+
+    @property
+    def seed_queue_enabled(self) -> bool:
+        """if true, limit how many torrents can be uploaded at once"""
+        return self.fields["seed-queue-enabled"]
+
+    @property
+    def seed_queue_size(self) -> int:
+        """max int of torrents to uploaded at once (see seed-queue-enabled)"""
+        return self.fields["seed-queue-size"]
+
+    @property
+    def seedRatioLimit(self) -> float:
+        """the default seed ratio for torrents to use"""
+        warnings.warn("use .seed_ratio_limit", DeprecationWarning, stacklevel=2)
+        return self.fields["seedRatioLimit"]
+
+    @property
+    def seed_ratio_limit(self) -> float:
+        """the default seed ratio for torrents to use"""
+        return self.fields["seedRatioLimit"]
+
+    @property
+    def seedRatioLimited(self) -> bool:
+        """true if seedRatioLimit is honored by default"""
+        warnings.warn("use .seed_ratio_limited", DeprecationWarning, stacklevel=2)
+        return self.fields["seedRatioLimited"]
+
+    @property
+    def seed_ratio_limited(self) -> bool:
+        """true if seedRatioLimit is honored by default"""
+        return self.fields["seedRatioLimited"]
+
+    @property
+    def speed_limit_down_enabled(self) -> bool:
+        """true means enabled"""
+        return self.fields["speed-limit-down-enabled"]
+
+    @property
+    def speed_limit_down(self) -> int:
+        """max global download speed (KBps)"""
+        return self.fields["speed-limit-down"]
+
+    @property
+    def speed_limit_up_enabled(self) -> bool:
+        """true means enabled"""
+        return self.fields["speed-limit-up-enabled"]
+
+    @property
+    def speed_limit_up(self) -> int:
+        """max global upload speed (KBps)"""
+        return self.fields["speed-limit-up"]
+
+    @property
+    def start_added_torrents(self) -> bool:
+        """true means added torrents will be started right away"""
+        return self.fields["start-added-torrents"]
+
+    @property
+    def trash_original_torrent_files(self) -> bool:
+        """true means the .torrent file of added torrents will be deleted"""
+        return self.fields["trash-original-torrent-files"]
+
+    # see below
+    @property
+    def units(self) -> Units:
+        return self.fields["units"]
+
+    @property
+    def utp_enabled(self) -> bool:
+        """true means allow utp"""
+        return self.fields["utp-enabled"]
+
+    @property
+    def version(self) -> str:
+        """long version str `$version ($revision)`"""
+        return self.fields["version"]
+
+    @property
+    def default_trackers(self) -> Optional[list]:
+        """
+        list of default trackers to use on public torrents
+        new at rpc-version 17
+        """
+        trackers = self.get("default-trackers")
+        if trackers:
+            return trackers.split("\n")
+        return None
+
+    @property
+    def rpc_version_semver(self) -> Optional[str]:
+        """
+        the current RPC API version in a semver-compatible str
+        new at rpc-version 17
+        """
+        return self.get("rpc-version-semver")
+
+    @property
+    def script_torrent_added_enabled(self) -> Optional[bool]:
+        """
+        whether or not to call the `added` script
+        new at rpc-version 17
+        """
+        return self.get("script-torrent-added-enabled")
+
+    @property
+    def script_torrent_added_filename(self) -> Optional[str]:
+        """
+        filename of the script to run
+        new at rpc-version 17
+        """
+        return self.get("script-torrent-added-filename")
+
+    @property
+    def script_torrent_done_seeding_enabled(self) -> Optional[bool]:
+        """
+        whether or not to call the `seeding-done` script
+        new at rpc-version 17
+        """
+        return self.get("script-torrent-done-seeding-enabled")
+
+    @property
+    def script_torrent_done_seeding_filename(self) -> Optional[str]:
+        """
+        filename of the script to run
+        new at rpc-version 17
+        """
+        return self.get("script-torrent-done-seeding-filename")
