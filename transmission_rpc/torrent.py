@@ -578,6 +578,11 @@ class Torrent(Container):
     @property
     def seed_idle_limit(self) -> int:
         return self.fields["seedIdleLimit"]
+    
+    @property
+    def sequential(self) -> bool:
+        """if the torrent is downloading sequentially"""
+        return self.fields["sequential"]
 
     # @property
     # def seed_idle_mode(self) -> int:

@@ -196,7 +196,7 @@ TORRENT_GET_ARGS: Dict[str, Args] = {
     "seedIdleMode": Args(Type.number, 10, description="Use global (0), torrent (1), or unlimited (2) limit."),
     "seedRatioLimit": Args(Type.double, 5, None, None, None, "Seed ratio limit."),
     "seedRatioMode": Args(Type.number, 5, description="Use global (0), torrent (1), or unlimited (2) limit."),
-    "sequential": Args(BaseType.boolean, 10),
+    "sequential": Args(Type.boolean, 10),
     "sizeWhenDone": Args(Type.number, 1, description="Size of the torrent download in bytes."),
     "startDate": Args(Type.number, 1, description="The date when the torrent was last started."),
     "status": Args(Type.number, 1, None, None, None, "Current status, see source"),

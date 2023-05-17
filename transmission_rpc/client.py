@@ -605,6 +605,7 @@ class Client:
         seed_idle_mode: Optional[int] = None,
         seed_ratio_limit: Optional[float] = None,
         seed_ratio_mode: Optional[int] = None,
+        sequential: Optional[bool] = None,
         tracker_add: Optional[Iterable[str]] = None,
         labels: Optional[Iterable[str]] = None,
         group: Optional[str] = None,
@@ -657,6 +658,8 @@ class Client:
             Valid options are :py:class:`transmission_rpc.constants.RatioLimitMode`
         seed_idle_limit
             torrent-level seeding ratio
+        sequential
+            true if downloading the torrent sequentially
         seed_idle_mode
             Seed inactivity mode.
 
@@ -739,6 +742,8 @@ class Client:
             args["seedRatioLimit"] = seed_ratio_limit
         if seed_ratio_mode is not None:
             args["seedRatioMode"] = seed_ratio_mode
+        if sequential is not None:
+            args["sequential"] = sequential
         if tracker_add is not None:
             args["trackerAdd"] = tracker_add
         if tracker_remove is not None:
